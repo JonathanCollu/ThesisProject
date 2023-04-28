@@ -237,11 +237,26 @@ class AbstractSprite(object):
           p = self.position + (r * np.cos((5*np.pi)/4), r * np.sin((5*np.pi)/4))
           line2 = LineString([other.vertices[0], other.vertices[2]])
         line1 = LineString([p, (p[0],1)])
-        point = line1.intersection(line2)
-        try: self._position[1] += point.y - p[1]
-        except: pass         
+        line3 = LineString([other.vertices[0], (other.vertices[0][0], other.y)])
+        d1, d2 = (0, 0)
+        if line1.intersection(line2):
+          point = line1.intersection(line2)
+          d1 = point.y - p[1]  + 1e-5
+        if line3.intersects(self.contours):
+          d2 = other.vertices[0][1] - line3.intersection(self.contours).bounds[1] + 1e-5
+        self._position[1] += max(d1, d2)   
     elif direction == "up":
-      if other.bounds[1] < self.y + r: self._position[1] -= (self.y + r) - other.bounds[1] + 1e-5
+      if other.vertices[2][0] < self.x:
+        line1 = LineString([other.vertices[2], (other.vertices[2][0], 1)])
+        point = line1.intersection(self.contours)        
+        try: self._position[1] -= point.bounds[3]  - other.vertices[2][1]
+        except: pass
+      elif other.vertices[1][0] > self.x:
+        line1 = LineString([other.vertices[1], (other.vertices[1][0], 1)])
+        point = line1.intersection(self.contours)
+        try: self._position[1] -= point.bounds[3]  - other.vertices[1][1] 
+        except: pass
+      else: self._position[1] -= other.bounds[3] - self.bounds[1]
     elif direction == "right":
       if self.y - r <= other.vertices[0][1] and self.y - r >= other.vertices[1][1]:
         p = self.position + (r * np.cos((7*np.pi)/4), r * np.sin((7*np.pi)/4))
@@ -312,11 +327,8 @@ class AbstractSprite(object):
     if direction == "down":
       if self.vertices[2][0] < other.x:
         line1 = LineString([self.vertices[2], (self.vertices[2][0], 1)])
-        point = line1.intersection(other.contours)
-        
-        try:
-          print(point, point.bounds[3]) 
-          self._position[1] += point.bounds[3]  - self.vertices[2][1]
+        point = line1.intersection(other.contours)        
+        try: self._position[1] += point.bounds[3]  - self.vertices[2][1]
         except: pass
       elif self.vertices[1][0] > other.x:
         line1 = LineString([self.vertices[1], (self.vertices[1][0], 1)])
@@ -704,13 +716,13 @@ class AbstractSprite(object):
           line2 = LineString([other.vertices[0], other.vertices[2]])
         line1 = LineString([(p[0],0), p])
         line3 = LineString([other.vertices[0], (other.vertices[0][0], self.y)])
-        d1, d2 = (1, 1)
+        d1, d2 = (0, 0)
         if line1.intersection(line2):
           point = line1.intersection(line2)
           d1 = p[1] - point.y  
         if line3.intersects(self.contours):
           d2 = line3.intersection(self.contours).y - other.vertices[0][1]
-        self._position[1] -= min(d1, d2) if min(d1, d2) != 1 else 0
+        self._position[1] -= max(d1, d2) #if min(d1, d2) != 1 else 0
          
     elif direction == "up":
       self._position[1] += other.bounds[1] - r - self.y

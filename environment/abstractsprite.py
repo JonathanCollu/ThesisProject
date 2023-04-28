@@ -310,32 +310,40 @@ class AbstractSprite(object):
   def _triangle_circle_overlap(self, other, direction):
     r = other.prop
     if direction == "down":
-      if self.bounds[1] < other.position[1] + r:
-        self._position[1] += other.position[1] + r - self.bounds[1]
+      if self.vertices[2][0] < other.x:
+        line1 = LineString([self.vertices[2], (self.vertices[2][0], 1)])
+        point = line1.intersection(other.contours)
+        
+        try:
+          print(point, point.bounds[3]) 
+          self._position[1] += point.bounds[3]  - self.vertices[2][1]
+        except: pass
+      elif self.vertices[1][0] > other.x:
+        line1 = LineString([self.vertices[1], (self.vertices[1][0], 1)])
+        point = line1.intersection(other.contours)
+        try: self._position[1] += point.bounds[3]  - self.vertices[1][1] 
+        except: pass
+      else: self._position[1] += other.bounds[3] - self.bounds[1]
     elif direction == "up":
-      if not (other.x + r <= self.vertices[0][0] or other.x - r >= self.vertices[0][0]):   
+      if not (other.x + 0.02 <= self.vertices[0][0] or other.x - 0.02 >= self.vertices[0][0]):   
         if self.bounds[3] > other.position[1] - r:
           self.position[1] -= self.bounds[3] - (other.position[1] - r) + 1e-5
       else:
-        if other.x <= self.vertices[0][0] and self.vertices[0][1] >= other.y + r * np.sin((7*np.pi)/4):
+        if other.x <= self.vertices[0][0]:
           p = other.position + (r * np.cos((7*np.pi)/4), r * np.sin((7*np.pi)/4))
-          line1 = LineString([p, (p[0],1)])
           line2 = LineString([self.vertices[0], self.vertices[1]])
+        if other.x > self.vertices[0][0]:
+          p = other.position + (r * np.cos((5*np.pi)/4), r * np.sin((5*np.pi)/4))
+          line2 = LineString([self.vertices[0], self.vertices[2]])
+        line1 = LineString([p, (p[0],1)])
+        line3 = LineString([self.vertices[0], (self.vertices[0][0], self.y)])
+        d1, d2 = (0, 0)
+        if line1.intersection(line2):
           point = line1.intersection(line2)
-          try: self._position[1] -= point.y - p[1]
-          except: pass
-        elif other.x > self.vertices[0][0] and self.vertices[0][1] >= other.y + r * np.sin((5*np.pi)/4):
-            p = other.position + (r * np.cos((5*np.pi)/4), r * np.sin((5*np.pi)/4))
-            line1 = LineString([p, (p[0],1)])
-            line2 = LineString([self.vertices[0], self.vertices[2]])
-            point = line1.intersection(line2)
-            try: self._position[1] -= point.y - p[1]
-            except: pass
-        else:
-          line1 = LineString([(self.vertices[0][0], 0), self.vertices[0]])
-          p1 = line1.intersection(other.polygon)
-          p1 = [p for p in list(p1.coords) if Point(p) != Point(self.vertices[0])]
-          if p1: self._position[1] -= self.vertices[0][1] - p1[0][1]  + 1e-5
+          d1 = point.y - p[1]  + 1e-5
+        if line3.intersects(other.contours):
+          d2 = self.vertices[0][1] - line3.intersection(other.contours).bounds[1] + 1e-5
+        self._position[1] -= max(d1, d2) # if min(d1, d2) != 1 else 0
     elif direction == "right":
       if self.vertices[2][1] >= other.y + r * np.sin((5*np.pi)/4):
         p1 = other.polygon.intersection(LineString([(0, self.vertices[2][1]), self.vertices[2]]))
@@ -695,9 +703,15 @@ class AbstractSprite(object):
           p = self.position + (r * np.cos((5*np.pi)/4), r * np.sin((5*np.pi)/4))
           line2 = LineString([other.vertices[0], other.vertices[2]])
         line1 = LineString([(p[0],0), p])
-        point = line1.intersection(line2)
-        try: self._position[1] -= p[1] - point.y
-        except: pass 
+        line3 = LineString([other.vertices[0], (other.vertices[0][0], self.y)])
+        d1, d2 = (1, 1)
+        if line1.intersection(line2):
+          point = line1.intersection(line2)
+          d1 = p[1] - point.y  
+        if line3.intersects(self.contours):
+          d2 = line3.intersection(self.contours).y - other.vertices[0][1]
+        self._position[1] -= min(d1, d2) if min(d1, d2) != 1 else 0
+         
     elif direction == "up":
       self._position[1] += other.bounds[1] - r - self.y
     elif direction == "right":
@@ -731,15 +745,37 @@ class AbstractSprite(object):
 
   def _handle_triangle_circle(self, other, direction):
     r = other.prop
-    if direction == "down": self._position[1] -= self.bounds[1] - (other.y + r)
+    if direction == "down": 
+      if self.vertices[2][0] < other.x:
+        line1 = LineString([self.vertices[2], (self.vertices[2][0], other.y)])
+        point = line1.intersection(other.contours)
+        try: self._position[1] -= self.vertices[2][1] - point.bounds[3]
+        except: pass
+      elif self.vertices[1][0] > other.x:
+        line1 = LineString([self.vertices[1], (self.vertices[1][0], other.y)])
+        point = line1.intersection(other.contours)
+        try: self._position[1] -= self.vertices[1][1] - point.bounds[3]
+        except: pass
+      else: self._position[1] -= self.bounds[1] - other.bounds[3]
     elif direction == "up":
-      if not (other.x + r <= self.vertices[0][0] or other.x - r >= self.vertices[0][0]):   
+      if not (other.x + 0.02 <= self.vertices[0][0] or other.x - 0.02 >= self.vertices[0][0]):
         self._position[1] += other.y - r - self.bounds[3]
       else:
-        line1 = LineString([self.vertices[0], other.position])
-        p1 = line1.intersection(other.polygon)
-        p1 = [p for p in list(p1.coords) if Point(p) != Point(other.position)]
-        if p1: self._position[1] += p1[0][1] - self.vertices[0][1]
+        if other.x <= self.vertices[0][0]:
+          p = other.position + (r * np.cos((7*np.pi)/4), r * np.sin((7*np.pi)/4))
+          line2 = LineString([self.vertices[0], self.vertices[1]])
+        if other.x > self.vertices[0][0]:
+          p = other.position + (r * np.cos((5*np.pi)/4), r * np.sin((5*np.pi)/4))
+          line2 = LineString([self.vertices[0], self.vertices[2]])
+        line1 = LineString([(p[0],0), p])
+        line3 = LineString([self.vertices[0], (self.vertices[0][0], other.y)])
+        d1, d2 = (0, 0)
+        if line1.intersection(line2):
+          point = line1.intersection(line2)
+          d1 = p[1] - point.y  
+        if line3.intersects(other.contours):
+          d2 = line3.intersection(other.contours).y - self.vertices[0][1]
+        self._position[1] += max(d1, d2) # if min(d1, d2) != 1 else 0
     elif direction == "right":
       if self.vertices[2][1] >= other.y + r * np.sin((5*np.pi)/4):
         p1 = other.polygon.intersection(LineString([self.vertices[2], other.position]))

@@ -227,7 +227,7 @@ def get_relative_positions(s1, s2):
 			directions = square_triangle_position(s1,s2)
 	else:
 		if s2.shape == "circle":
-			directions = circle_triangle_position(s2,s1, True) 
+			directions = triangle_circle_position(s2,s1) 
 		elif s2.shape == "square":
 			directions = triangle_square_position(s1,s2)
 		else:
@@ -251,14 +251,22 @@ def circle_square_position(s1, s2, reverse=False):
 	if s1.position[1] > s2.bounds[3]: directions.append("up")
 	return [opposite[d] for d in directions] if reverse else directions
 
-def circle_triangle_position(c, t, reverse=False):
+def circle_triangle_position(c, t):
 	directions = []
 	y = c.y + c.prop * np.sin((5*np.pi)/4)
 	if c.x < t.x and c.bounds[1] < t.bounds[3] and c.bounds[3] > t.bounds[1]: directions.append("left")
 	if c.x > t.x and c.bounds[1] < t.bounds[3] and c.bounds[3] > t.bounds[1]: directions.append("right")
 	if y > t.bounds[1]: directions.append("up")
 	if c.y + c.prop <= t.bounds[1] + 0.02: directions.append("down")
-	return [opposite[d] for d in directions] if reverse else directions
+	return directions
+
+def triangle_circle_position(c, t):
+	directions = []
+	if t.x < c.x and ((t.bounds[1] <= c.bounds[3] and t.bounds[3] >= c.bounds[1]) or (t.bounds[3] <= c.bounds[3] and t.bounds[1] >= c.bounds[1])): directions.append("left")
+	if t.x > c.x and ((t.bounds[1] <= c.bounds[3] and t.bounds[3] >= c.bounds[1]) or (t.bounds[3] <= c.bounds[3] and t.bounds[1] >= c.bounds[1])): directions.append("right")
+	if t.bounds[1] > c.y: directions.append("up")
+	if t.bounds[1] <= c.y: directions.append("down")
+	return directions
 
 def square_square_position(s1, s2):
 	directions = []

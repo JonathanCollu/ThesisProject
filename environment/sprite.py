@@ -221,6 +221,7 @@ class Sprite(AbstractSprite):
         cs, carried_sprites = get_closest(self, carried_sprites, direction)
         self.handle_collision(cs, direction)
         positions = get_relative_positions(self, cs)
+        print(positions)
         if direction in [opposite[p] for p in positions]:
           self._position += motion
           others_ = [sprite for sprite in others if sprite != cs]

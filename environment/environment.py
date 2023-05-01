@@ -22,7 +22,6 @@ from __future__ import print_function
 import dm_env
 import numpy as np
 import six
-from copy import deepcopy
 
 class Environment(dm_env.Environment):
   """Environment class for Spriteworld.
@@ -78,11 +77,9 @@ class Environment(dm_env.Environment):
           return True
     return False
 
-  def get_image_dataset(self, train_samples=10, test_samples=0):
+  def get_image_dataset(self, train_samples=60000, test_samples=1000):
     for i in range(train_samples):
       timestep = self.reset()
-      while self.check_occlusion():
-        timestep = self.reset()
       image = timestep.observation["image"]/255
       del timestep
       with open(f"spriteworld/data/train/image_{i}.npy", 'wb') as f:

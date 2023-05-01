@@ -212,7 +212,6 @@ class FindGoalPositionInteractive(AbstractTask):
     if self._previous_positions is None:
       self._previous_positions = [s.position for s in deepcopy(sprites)]
     reward = self._single_sprite_reward(sprites[self._goal_sprite])
-    print(reward)
     if reward >= 0: reward += self._terminate_bonus
 
     if self._obstacles:

@@ -183,8 +183,7 @@ class AbstractSprite(object):
         try: self._position[1] -= self.vertices[0][1] - p.y
         except: pass
       else:
-        if other.bounds[3] > (other.y - other.prop):
-          self._position[1] -= other.bounds[3] - (other.y - other.prop) + 1e-5
+        self._position[1] -= self.bounds[3] - other.bounds[1] + 1e-5
     elif direction == "right":
       if self.vertices[0][1] < other.y:
         line1 = LineString([self.vertices[0], self.vertices[1]])
@@ -256,7 +255,7 @@ class AbstractSprite(object):
         point = line1.intersection(self.contours)
         try: self._position[1] -= point.bounds[3]  - other.vertices[1][1] 
         except: pass
-      else: self._position[1] -= other.bounds[3] - self.bounds[1]
+      else: self._position[1] -= self.bounds[3] - other.bounds[1]
     elif direction == "right":
       if self.y - r <= other.vertices[0][1] and self.y - r >= other.vertices[1][1]:
         p = self.position + (r * np.cos((7*np.pi)/4), r * np.sin((7*np.pi)/4))
@@ -303,7 +302,7 @@ class AbstractSprite(object):
         try: self._position[1] += point.y  - self_vert[2][1] 
         except: pass
       else: self._position[1] += other.bounds[3] - self.bounds[1]
-    elif direction == "up": self._position[1] -= self.bounds[3] - other.bounds[1] + 1e-5
+    elif direction == "up": self._position[1] -= self.bounds[3] - other.bounds[1] + 1e-4
     elif direction == "right":
       if self.bounds[1] >= other.bounds[1]: 
         line1 = LineString([other_vert[0], other_vert[1]])
@@ -725,15 +724,30 @@ class AbstractSprite(object):
         self._position[1] -= max(d1, d2) #if min(d1, d2) != 1 else 0
          
     elif direction == "up":
-      self._position[1] += other.bounds[1] - r - self.y
+      if other.vertices[2][0] < self.x:
+        line1 = LineString([other.vertices[2], (other.vertices[2][0], self.y)])
+        point = line1.intersection(self.contours)
+        try: self._position[1] += other.vertices[2][1] - point.bounds[3]
+        except: pass
+      elif other.vertices[1][0] > self.x:
+        line1 = LineString([other.vertices[1], (other.vertices[1][0], self.y)])
+        point = line1.intersection(self.contours)
+        try: self._position[1] += other.vertices[1][1] - point.bounds[3]
+        except: pass
+      else: self._position[1] += other.bounds[1] - self.bounds[3]
     elif direction == "right":
       if self.y - r <= other.vertices[0][1] and self.y - r >= other.vertices[1][1]:
         p = self.position + (r * np.cos((7*np.pi)/4), r * np.sin((7*np.pi)/4))
         line1 = LineString([p, (1, self.y)])
         line2 = LineString([other.vertices[0], other.vertices[1]])
-        point = line1.intersection(line2)
-        try: self._position[0] += point.x - p[0]
-        except: pass 
+        line3 = LineString([(self.x, other.vertices[0][1]), other.vertices[0]])
+        d1, d2 = (0, 0)
+        if line1.intersection(line2):
+          point = line1.intersection(line2)
+          d1 = point.x - p[0]
+        if line3.intersects(self.contours):
+          d2 = other.vertices[0][0] - line3.intersection(self.contours).x  
+        self._position[0] += max(d1, d2)
       else:
         line1 = LineString([(self.x, other.vertices[1][1]), other.vertices[1]])
         line2 = LineString(self.vertices)
@@ -745,9 +759,15 @@ class AbstractSprite(object):
         p = self.position + (r * np.cos((5*np.pi)/4), r * np.sin((5*np.pi)/4))
         line1 = LineString([(0, self.y), p])
         line2 = LineString([other.vertices[0], other.vertices[2]])
+        line3 = LineString([(self.x, other.vertices[0][1]), other.vertices[0]])
         point = line1.intersection(line2)
-        try: self._position[0] -= p[0] - point.x
-        except: pass 
+        d1, d2 = (0, 0)
+        if line1.intersection(line2):
+          point = line1.intersection(line2)
+          d1 = p[0] - point.x
+        if line3.intersects(self.contours):
+          d2 = line3.intersection(self.contours).x - other.vertices[0][0]  
+        self._position[0] -= max(d1, d2)
       else:
         line1 = LineString([other.vertices[2], (self.x, other.vertices[2][1])])
         line2 = LineString(self.vertices)

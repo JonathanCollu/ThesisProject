@@ -123,20 +123,10 @@ class Environment(dm_env.Environment):
     if self._reset_next_step:
       return self.reset()
 
+
     self._step_count += 1
     reward = self._action_space.step(
         action, self._sprites, keep_in_frame=self._keep_in_frame)
-
-    # Update sprite positions from their velocities
-    #for sprite in self._sprites:
-    #  sprite.update_position(keep_in_frame=self._keep_in_frame)
-    
-    #sprites = deepcopy(self._sprites)
-    #for i, sprite in enumerate(self._sprites): 
-    #  _ = sprites.pop(i)
-    #  sprite.update_position(keep_in_frame=self._keep_in_frame, others=sprites)
-    #  sprites.insert(i, sprite)
-
     reward += self._task.reward(self._sprites)
     observation = self.observation()
 

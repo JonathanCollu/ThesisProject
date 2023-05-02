@@ -157,6 +157,10 @@ class Environment(dm_env.Environment):
     }
     if self._metadata:
       global_state['metadata'] = self._metadata
+    if self._task.__class__.__name__ == 'FindGoalPositionInteractive':
+      return {'sprites': self._sprites + [self._task.goal_mark], 'global_state': global_state}
+    if self._task.__class__.__name__ == 'SortingInteractive':
+      return {'sprites': self._sprites + list(self._task.goal_marks(self._sprites[:-1])), 'global_state': global_state}
     return {'sprites': self._sprites, 'global_state': global_state}
 
   def observation(self):

@@ -27,10 +27,50 @@ from __future__ import division
 from __future__ import print_function
 
 import abc
+import random
 import numpy as np
 import six
 from sklearn import metrics
 from copy import deepcopy
+from spriteworld import constants
+from matplotlib import path as mpl_path
+from matplotlib import transforms as mpl_transforms
+
+
+
+def satisfy(position, bounds):
+  if position[0] >= bounds[0] and position[0] <= bounds[2]:
+    return position[1] >= bounds[1] and position[1] <= bounds[3]
+  return False
+      
+class GoalMark(object):
+
+  def __init__(self, position, shape='spoke_4', color=(0., 1., 1.)):
+    self._position = position
+    self._color = color
+    path = mpl_path.Path(constants.SHAPES[shape])
+    scale_rotate = (
+        mpl_transforms.Affine2D().scale(0.07) +
+        mpl_transforms.Affine2D().rotate_deg(0))
+    self._centered_path = scale_rotate.transform_path(path)
+
+  def __eq__(self, __o):
+    return self._position == __o._position
+
+  def __hash__(self):
+    return hash(self._position)
+
+  @property
+  def color(self):
+    # red
+    return self._color
+
+  @property
+  def vertices(self):
+    """Numpy array of vertices of the shape."""
+    transform = mpl_transforms.Affine2D().translate(*self._position)
+    path = transform.transform_path(self._centered_path)
+    return path.vertices
 
 @six.add_metaclass(abc.ABCMeta)
 class AbstractTask(object):
@@ -163,7 +203,6 @@ class FindGoalPositionInteractive(AbstractTask):
 
   def __init__(self,
                goal_sprite=0,
-               goal_position=(0.5, 0.5),
                terminate_distance=0.05,
                terminate_bonus=0.0,
                weights_dimensions=(1, 1),
@@ -177,7 +216,7 @@ class FindGoalPositionInteractive(AbstractTask):
     negative, except for a termination bonus when the goal is reached.
 
     Args:
-      goal_sprite: index of the sprite to be carried to the goal position
+      goal_sprite: index of the sprite to be carried to the goal position, if -1 the goal_sprite is the agent itself
       goal_position: Position of the goal.
       terminate_distance: Distance from goal position at which to clip reward.
         If all sprites are within this distance, terminate episode.
@@ -191,7 +230,7 @@ class FindGoalPositionInteractive(AbstractTask):
         terminate_bonus. Empirically, 50 seems to be a good value.
     """
     self._goal_sprite = goal_sprite
-    self._goal_position = np.asarray(goal_position)
+    self._goal_position = np.random.uniform(0.1, 0.9, 2)
     self._terminate_bonus = terminate_bonus
     self._terminate_distance = terminate_distance
     self._sparse_reward = sparse_reward
@@ -201,8 +240,8 @@ class FindGoalPositionInteractive(AbstractTask):
     self._previous_positions = None
 
   def _single_sprite_reward(self, sprite):
-    goal_distance = np.sum(self._weights_dimensions *
-                           (sprite.position - self._goal_position)**2.)**0.5
+    pos = sprite.position if sprite != -1 else self.position
+    goal_distance = np.sum(self._weights_dimensions * (pos - self._goal_position)**2.)**0.5
     raw_reward = self._terminate_distance - goal_distance
     return self._raw_reward_multiplier * raw_reward
 
@@ -210,24 +249,23 @@ class FindGoalPositionInteractive(AbstractTask):
     """Calculate total reward summed over filtered sprites."""
     reward = 0.
     if self._previous_positions is None:
-      self._previous_positions = [s.position for s in deepcopy(sprites)]
-    reward = self._single_sprite_reward(sprites[self._goal_sprite])
+      self._previous_positions = [s.position for s in deepcopy(sprites[:-1])]
+    reward = self._single_sprite_reward(sprites[:-1][self._goal_sprite])
     if reward >= 0: reward += self._terminate_bonus
 
     if self._obstacles:
-      for i in range(1, len(sprites) - 1):
-        movement = self._previous_positions[i] - sprites[i].position
+      for i in range(1, len(sprites[:-1]) - 1):
+        movement = self._previous_positions[i] - sprites[:-1][i].position
         if np.linalg.norm(movement) != 0: reward -= 1
-    self._previous_positions = [s.position for s in deepcopy(sprites)]
+    self._previous_positions = [s.position for s in deepcopy(sprites[:-1])]
     return reward
 
   def success(self, sprites):
     return self._single_sprite_reward(sprites[self._goal_sprite]) >= 0
 
-
-    
-
-
+  @property
+  def goal_mark(self):
+    return GoalMark(self._goal_position)
 
 class Clustering(AbstractTask):
   """Task for cluster by color/shape conditions."""
@@ -315,6 +353,115 @@ class Clustering(AbstractTask):
     metric = self._compute_clustering_metric(sprites)
     return metric >= self._termination_threshold
 
+class SortingInteractive(Clustering):
+  """Used for tasks that require moving some sprites to a goal position."""
+
+  def __init__(self,
+               cluster_distribs,
+               cluster_type,
+               termination_threshold=2.5,
+               terminate_bonus=0.0,
+               sparse_reward=False,
+               reward_range=10,
+               raw_reward_multiplier=50):
+    """Construct goal-finding task.
+
+    This task rewards the agent for bringing all sprites with factors contained
+    in a filter distribution to a goal position. Rewards are offset to be
+    negative, except for a termination bonus when the goal is reached.
+
+    Args:
+      goal_sprite: index of the sprite to be carried to the goal position, if -1 the goal_sprite is the agent itself
+      goal_position: Position of the goal.
+      terminate_distance: Distance from goal position at which to clip reward.
+        If all sprites are within this distance, terminate episode.
+      terminate_bonus: Extra bonus for getting all sprites within
+        terminate_distance.
+      weights_dimensions: Weights modifying the contributions of the (x,
+        y)-dimensions to the distance to goal computation.
+      sparse_reward: Boolean (default False), whether to provide dense rewards
+        or only reward at the end of an episode.
+      raw_reward_multiplier: Multiplier for the reward to be applied before
+        terminate_bonus. Empirically, 50 seems to be a good value.
+    """
+    self._cluster_distribs = cluster_distribs
+    self._num_clusters = len(cluster_distribs)
+    self._goal_positions = {}
+    self._termination_threshold = termination_threshold
+    self._terminate_bonus = terminate_bonus
+    self._sparse_reward = sparse_reward
+    self._reward_range = reward_range
+    self._raw_reward_multiplier = raw_reward_multiplier
+    self._cluster_type = cluster_type
+
+  def assign_position(self, clusters):
+    if self._goal_positions != {}: return
+    # bottom_left, bottom_right, top_left, top_right
+    positions = [(0, 0, 0.5, 0.5), (0.5, 0, 1, 0.5), (0, 0.5, 0.5, 1), (0.5, 0.5, 1, 1)]
+    random.shuffle(positions)
+    for c in clusters:
+      if not c in self._goal_positions.keys():
+        self._goal_positions[c] = positions.pop(random.randint(0, len(positions) - 1))  
+    del positions
+
+  def _position_reward(self, sprites):
+
+    reward = 0
+    clusters = self._cluster_assignments(sprites)
+    self.assign_position(clusters)
+    for i, sprite in enumerate(sprites):
+      pos_i = self._goal_positions[clusters[i]]
+      if not satisfy(sprite.position, pos_i):
+        reward -= 1
+      
+    return self._raw_reward_multiplier * reward
+
+  def reward(self, sprites):
+    """Calculate total reward summed over filtered sprites."""
+    
+    reward = 0.
+
+    # Clustering reward
+    metric = self._compute_clustering_metric(sprites)
+
+    # Low DB index is better clustering
+    dense_reward = (metric -
+                    self._termination_threshold) * self._reward_range / 2.
+
+    if metric >= self._termination_threshold:  # task succeeded
+      reward += self._terminate_bonus
+      reward += dense_reward
+    elif not self._sparse_reward:
+      reward += dense_reward
+
+    reward += self._position_reward(sprites[:-1])
+
+    return reward
+
+  def success(self, sprites):
+    metric = self._compute_clustering_metric(sprites)
+    return metric >= self._termination_threshold and self._position_reward(sprites[:-1]) >=0
+
+  
+  def goal_marks(self, sprites):
+    goal_marks = set()
+    colors = {"red": (0., 1., 1.), "yellow": (0.17, 1., 1.), "blue": (0.67, 1., 1.), "green": (0.38, 1., 1.)}
+    clusters = self._cluster_assignments(sprites)
+    self.assign_position(clusters)
+    if self._cluster_type == "color":
+      for i, sprite in enumerate(sprites):
+        pos = self._goal_positions[clusters[i]]
+        pos = ((pos[0] + pos[2])/2, (pos[1] + pos[3])/2)
+        col = (sprite.color[0].item(), 1., 1.)
+        goal_marks.add(GoalMark(pos, color=col))
+    else:
+      for i, sprite in enumerate(sprites):
+        pos = self._goal_positions[clusters[i]]
+        pos = ((pos[0] + pos[2])/2, (pos[1] + pos[3])/2)
+        shape = sprite.shape
+        goal_marks.add(GoalMark(pos, shape=shape))
+    del colors
+    return goal_marks
 
 class MetaAggregated(AbstractTask):
   """Combines several tasks together."""

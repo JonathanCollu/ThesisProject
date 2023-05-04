@@ -717,10 +717,9 @@ class AbstractSprite(object):
         line3 = LineString([other.vertices[0], (other.vertices[0][0], self.y)])
         d1, d2 = (0, 0)
         if line1.intersection(line2):
-          point = line1.intersection(line2)
-          d1 = p[1] - point.y  
+          d1 = p[1] - line1.intersection(line2).y
         if line3.intersects(self.contours):
-          d2 = line3.intersection(self.contours).y - other.vertices[0][1]
+          d2 = line3.intersection(self.contours).bounds[1] - other.vertices[0][1]
         self._position[1] -= max(d1, d2) #if min(d1, d2) != 1 else 0
          
     elif direction == "up":
@@ -746,7 +745,7 @@ class AbstractSprite(object):
           point = line1.intersection(line2)
           d1 = point.x - p[0]
         if line3.intersects(self.contours):
-          d2 = other.vertices[0][0] - line3.intersection(self.contours).x  
+          d2 = other.vertices[0][0] - line3.intersection(self.contours).bounds[2]  
         self._position[0] += max(d1, d2)
       else:
         line1 = LineString([(self.x, other.vertices[1][1]), other.vertices[1]])
@@ -766,7 +765,7 @@ class AbstractSprite(object):
           point = line1.intersection(line2)
           d1 = p[0] - point.x
         if line3.intersects(self.contours):
-          d2 = line3.intersection(self.contours).x - other.vertices[0][0]  
+          d2 = line3.intersection(self.contours).bounds[0] - other.vertices[0][0]  
         self._position[0] -= max(d1, d2)
       else:
         line1 = LineString([other.vertices[2], (self.x, other.vertices[2][1])])
@@ -806,7 +805,7 @@ class AbstractSprite(object):
           point = line1.intersection(line2)
           d1 = p[1] - point.y  
         if line3.intersects(other.contours):
-          d2 = line3.intersection(other.contours).y - self.vertices[0][1]
+          d2 = line3.intersection(other.contours).bounds[1] - self.vertices[0][1]
         self._position[1] += max(d1, d2) # if min(d1, d2) != 1 else 0
     elif direction == "right":
       if self.vertices[2][1] >= other.y + r * np.sin((5*np.pi)/4):

@@ -162,7 +162,7 @@ class Embodied(object):
     Returns:
       Scalar cost of taking this action.
     """
-    motion = self.action_to_motion[action[1]]
+    motion = self.action_to_motion[action]
        
     # Move agent body
     sprites[-1].move(motion, keep_in_frame, sprites[:-1])

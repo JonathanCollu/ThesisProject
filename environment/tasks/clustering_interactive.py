@@ -147,6 +147,7 @@ def get_config(mode='train'):
   if np.random.random() < 0.5:
     task = tasks.Clustering(c0_clusters, terminate_bonus=0., reward_range=10.)
   else:
+    print('shape')
     sprite_gen = sprite_gen_shape
     task = tasks.Clustering(c0_clusters_shape, terminate_bonus=0., reward_range=10.)
 

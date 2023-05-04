@@ -77,7 +77,8 @@ class Environment(dm_env.Environment):
           return True
     return False
 
-  def get_image_dataset(self, train_samples=60000, test_samples=1000):
+  def get_image_dataset(self, train_samples=60000, test_samples=50):
+    
     for i in range(train_samples):
       timestep = self.reset()
       image = timestep.observation["image"]/255
@@ -107,13 +108,13 @@ class Environment(dm_env.Environment):
     return init_state
 
 
-  def success(self):
-    return self._task.success(self._sprites)
+  def success(self, reset_pos=False):
+    return self._task.success(self._sprites, reset_pos)
 
   def should_terminate(self):
     timeout = self._step_count >= self._max_episode_length
     out_of_frame = any([sprite.out_of_frame for sprite in self._sprites])
-    return self.success() or out_of_frame or timeout
+    return self.success(True) or out_of_frame or timeout
 
   def step(self, action):
     """Step the environment with an action."""

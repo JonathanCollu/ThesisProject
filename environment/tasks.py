@@ -95,7 +95,7 @@ class AbstractTask(object):
     """
 
   @abc.abstractmethod
-  def success(self, sprites):
+  def success(self, sprites, _):
     """Compute whether the task has been successfully solved.
 
     Args:
@@ -117,7 +117,7 @@ class NoReward(AbstractTask):
     """Calculate reward from sprites."""
     return 0.0
 
-  def success(self, unused_sprites):
+  def success(self, unused_sprites, _):
     return False
 
 
@@ -194,7 +194,7 @@ class FindGoalPosition(AbstractTask):
 
     return reward
 
-  def success(self, sprites):
+  def success(self, sprites, _):
     return all(np.array(self._filtered_sprites_rewards(sprites)) >= 0)
 
 
@@ -255,13 +255,18 @@ class FindGoalPositionInteractive(AbstractTask):
 
     if self._obstacles:
       for i in range(1, len(sprites[:-1]) - 1):
-        movement = self._previous_positions[i] - sprites[:-1][i].position
+        try:
+          movement = self._previous_positions[i] - sprites[:-1][i].position
+        except: exit((len(self._previous_positions), len(sprites[:-1])))
         if np.linalg.norm(movement) != 0: reward -= 1
     self._previous_positions = [s.position for s in deepcopy(sprites[:-1])]
     return reward
 
-  def success(self, sprites):
-    return self._single_sprite_reward(sprites[self._goal_sprite]) >= 0
+  def success(self, sprites, reset_pos=False):
+    success = self._single_sprite_reward(sprites[self._goal_sprite]) >= 0
+    if success or reset_pos:
+      self._previous_positions = None
+    return success
 
   @property
   def goal_mark(self):
@@ -349,7 +354,7 @@ class Clustering(AbstractTask):
 
     return reward
 
-  def success(self, sprites):
+  def success(self, sprites, _):
     metric = self._compute_clustering_metric(sprites)
     return metric >= self._termination_threshold
 
@@ -438,7 +443,7 @@ class SortingInteractive(Clustering):
 
     return reward
 
-  def success(self, sprites):
+  def success(self, sprites, _):
     metric = self._compute_clustering_metric(sprites)
     return metric >= self._termination_threshold and self._position_reward(sprites[:-1]) >=0
 
@@ -506,9 +511,9 @@ class MetaAggregated(AbstractTask):
   def reward(self, sprites):
     rewards = self._reward_aggregator(
         [task.reward(sprites) for task in self._subtasks])
-    rewards += self._terminate_bonus * self.success(sprites)
+    rewards += self._terminate_bonus * self.success(sprites, None)
     return rewards
 
-  def success(self, sprites):
+  def success(self, sprites, _):
     return self._termination_criterion(
-        [task.success(sprites) for task in self._subtasks])
+        [task.success(sprites, _) for task in self._subtasks])
